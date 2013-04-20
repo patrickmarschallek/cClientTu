@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -32,6 +31,8 @@ int main(int argc, char *argv[])
 		return;
 	}
 
+	/* ----------- Creating socket --------------- */
+	
 	printf("Connecting to %s:%d\nSending integer %d\n", serverIP, serverPort, integerToSend);
 
 	// domain = AF_INET (IPv4)
@@ -63,16 +64,76 @@ int main(int argc, char *argv[])
 		return;
 	}
 	printf("connection established!\n");
+	
+	/* ----------- Sending integer --------------- */
+	
+	// integerToSendH = integerToSend in network format
+	int integerToSendN = (int) htonl(integerToSend);
 
-	if (send (socketDesc, &integerToSend, sizeof(integerToSend), 0) == -1 ){
+	if (write(socketDesc, &integerToSendN, sizeof(integerToSendN)) == -1 ){
 		//error while sending data
 		printf("Error while sending integer\n");
 	};
 	printf("integer sent!\n");
 
-	char buffer[128];
+	
+	/* ----------- Receiving integer & string --------------- */
+	
+	int32_t intBuffer;
+	
+	if(recv(socketDesc, &intBuffer, sizeof intBuffer, 0) == -1){
+		//error while sending data
+		printf("Error while retrieving Integer\n");
+	}
 
-	int recvBytes = recv(socketDesc, buffer, sizeof buffer, 0);
+    int receivedInt = ntohl(intBuffer);
 
+    printf("Received int: %d\n", receivedInt);
+
+	char cBuffer[40];
+	
+	if (read(socketDesc, &cBuffer, sizeof cBuffer) == -1){
+		//error while sending data
+		printf("Error while retrieving String\n");
+	}
+
+	//Getting actual length of the String
+	//Checking every second value, because Java writes chars in 16 bits
+	int lengthOfString = 0;
+	int i;
+	for(i  = 1; i < sizeof cBuffer; i += 2){
+		if(cBuffer[i] == 0){
+			break;
+		}
+	}
+
+	char receivedString[i/2];
+
+	for(i = 0; i < sizeof receivedString; i++){
+		receivedString[i] = cBuffer[(i + 1) * 2 - 1];
+	}
+
+	printf("received String: \"%s\" \n", receivedString);
+
+	/* ----------- Changing cases in String --------------- */
+	
+	for(i = 0; i < sizeof receivedString; i++){
+		if(receivedString[i] >= 65 && receivedString[i] <=90){
+			receivedString[i] += 32;
+		} else if (receivedString[i] >= 97 && receivedString[i] <= 122){
+			receivedString[i] -= 32;
+		}
+	}
+
+	printf("converted String: \"%s\" \n", receivedString);
+	
+	// /* ----------- Sending String --------------- */
+
+	if (write(socketDesc, &receivedString, sizeof(receivedString)) == -1 ){
+		//error while sending data
+		printf("Error while sending String\n");
+	};
+	printf("String sent!\n");
+	
 	close(socketDesc);
 }
