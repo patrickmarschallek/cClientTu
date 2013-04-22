@@ -5,60 +5,66 @@
 #include <string.h>
 
 void printHelp(){
-	printf("Usage: a.out serverip serverport integer\n");
-	printf("\tserverip - the server's IPv4 address as a string, example: 10.0.0.1\n");
-	printf("\tserverport - the server's port nr as a string\n");
-	printf("\tinteger - the integer to send to the server\n");
+	printf("Usage: client serverip senderport receiverport integer\n");
 }
 
 int main(int argc, char *argv[])
 {
 
-	if(argc != 4){
+	if(argc != 5){
 		printHelp();
 		return;
 	}
 
 	char* serverIP = argv[1];
-	char* serverPortC = argv[2];
-	char* integerToSendC = argv[3];
+	char* senderPortC = argv[2];
+	char* receiverPortC = argv[3];
+	char* integerToSendC = argv[4];
 
-	int serverPort = atoi(serverPortC);
+	const char lineEnd = '\n';
+
+	int senderPort = atoi(senderPortC);
+	int receiverPort = atoi(receiverPortC);
 	int integerToSend = atoi(integerToSendC);
 
-	if(serverPort == 0){
+	if(senderPort == 0){
 		printHelp();
 		return;
 	}
 
-	/* ----------- Creating socket --------------- */
-	
-	printf("Connecting to %s:%d\nSending integer %d\n", serverIP, serverPort, integerToSend);
+	/* ----------- Creating sockets --------------- */
 
 	// domain = AF_INET (IPv4)
 	// type = SOCK_STREAM
 	// 		Provides sequenced, reliable, two-way, connection-based byte streams. An out-of-band data transmission mechanism may be supported.
 	// using TCP/IP
-	int socketDesc = socket(AF_INET, SOCK_STREAM, 0);
+	int senderSocket = socket(AF_INET, SOCK_STREAM, 0);
+	int receiverSocket = socket(AF_INET, SOCK_STREAM, 0);
 
 	printf("socket created!\n");
 
-	if(socketDesc < 0) {
+	if(senderSocket < 0 || receiverSocket < 0) {
 		//error when creating socket
-		printf("Error when creating socket\n");
+		printf("Error when creating sockets\n");
 		return;
 	} 
 
 	// creating serveraddress of type sockaddr_in
-	struct sockaddr_in serverAddr;
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(serverPort);
-	inet_pton(AF_INET, serverIP, &serverAddr.sin_addr);
+	struct sockaddr_in serverAddrSender;
+	serverAddrSender.sin_family = AF_INET;
+	serverAddrSender.sin_port = htons(senderPort);
+	inet_pton(AF_INET, serverIP, &serverAddrSender.sin_addr);
 
-	printf("establishing conenction...\n");
-	int connection = connect(socketDesc, (struct sockaddr*) &serverAddr, sizeof serverAddr);
+	struct sockaddr_in serverAddrReceiver;
+	serverAddrReceiver.sin_family = AF_INET;
+	serverAddrReceiver.sin_port = htons(receiverPort);
+	inet_pton(AF_INET, serverIP, &serverAddrReceiver.sin_addr);
 
-	if(connection < 0) {
+	// printf("establishing conenction...\n");
+	int sendConnection = connect(senderSocket, (struct sockaddr*) &serverAddrSender, sizeof serverAddrSender);
+	int recvConnection = connect(receiverSocket, (struct sockaddr*) &serverAddrReceiver, sizeof serverAddrReceiver);
+
+	if(sendConnection < 0 || recvConnection < 0) {
 		//error when establishing connection
 		printf("Error when establishing connection\n");
 		return;
@@ -68,72 +74,108 @@ int main(int argc, char *argv[])
 	/* ----------- Sending integer --------------- */
 	
 	// integerToSendH = integerToSend in network format
-	int integerToSendN = (int) htonl(integerToSend);
+	int32_t integerToSendN = (int) htonl(integerToSend);
+	int index;
+	int empty = 0;
 
-	if (write(socketDesc, &integerToSendN, sizeof(integerToSendN)) == -1 ){
+
+	printf("sending integer %s\n", integerToSendC);
+	if (write(senderSocket, &integerToSendN, sizeof integerToSendN) == -1 ){
 		//error while sending data
-		printf("Error while sending integer\n");
+		printf("Error while sending String\n");
 	};
 	printf("integer sent!\n");
 
 	
 	/* ----------- Receiving integer & string --------------- */
 	
-	int32_t intBuffer;
+	int32_t intBuffer = 0;
 	
-	if(recv(socketDesc, &intBuffer, sizeof intBuffer, 0) == -1){
-		//error while sending data
-		printf("Error while retrieving Integer\n");
+	int receivedBytes = 0;
+	int32_t receivedInteger = 0;
+	while(receivedBytes < 4){
+		int readBytes = read(receiverSocket, &intBuffer, (sizeof intBuffer) - receivedBytes, receivedBytes);
+		receivedInteger += (intBuffer << (8*receivedBytes));
+		receivedBytes += readBytes;
 	}
 
-    int receivedInt = ntohl(intBuffer);
+    int32_t receivedInt = ntohl(receivedInteger);
 
     printf("Received int: %d\n", receivedInt);
 
-	char cBuffer[40];
-	
-	if (read(socketDesc, &cBuffer, sizeof cBuffer) == -1){
-		//error while sending data
-		printf("Error while retrieving String\n");
+    int32_t intBuffer2 = 0;
+    int32_t receivedBytes2 = 0;
+	int32_t receivedInteger2 = 0;
+	while(receivedBytes2 < 4){
+		int readBytes = read(receiverSocket, &intBuffer2, (sizeof intBuffer2) - receivedBytes2, receivedBytes2);
+		receivedInteger2 += (intBuffer2 << (8*receivedBytes2));
+		receivedBytes2 += readBytes;
 	}
 
-	//Getting actual length of the String
-	//Checking every second value, because Java writes chars in 16 bits
-	int lengthOfString = 0;
+    int32_t receivedCount = ntohl(receivedInteger2);
+
+    if(receivedCount > 20 || receivedCount < 0){
+    	printf("Received wrong count\n");
+
+		close(senderSocket);
+		close(receiverSocket);
+
+		return;
+    }
+
+	char cBuffer[receivedCount];
+	char recvString[receivedCount];
+	
+	receivedBytes = 0;
+	while(receivedBytes < receivedCount){
+		int readBytes = read(receiverSocket, &cBuffer, (sizeof cBuffer) - receivedBytes, receivedBytes);
+		int j;
+		for(j = 0; j < readBytes; j++){
+			recvString[j + receivedBytes] = cBuffer[j];
+		}
+		receivedBytes += readBytes;
+	}
+	recvString[receivedCount] = '\0';
+
+	printf("received String: \"%s\"\n", recvString);
+
+	//  ----------- Changing cases in String --------------- 
 	int i;
-	for(i  = 1; i < sizeof cBuffer; i += 2){
-		if(cBuffer[i] == 0){
-			break;
+	for(i = 0; i < sizeof recvString; i++){
+		if(recvString[i] >= 65 && recvString[i] <=90){
+			recvString[i] += 32;
+		} else if (recvString[i] >= 97 && recvString[i] <= 122){
+			recvString[i] -= 32;
 		}
 	}
 
-	char receivedString[i/2];
-
-	for(i = 0; i < sizeof receivedString; i++){
-		receivedString[i] = cBuffer[(i + 1) * 2 - 1];
-	}
-
-	printf("received String: \"%s\" \n", receivedString);
-
-	/* ----------- Changing cases in String --------------- */
+	printf("converted String: \"%s\" \n", recvString);
 	
-	for(i = 0; i < sizeof receivedString; i++){
-		if(receivedString[i] >= 65 && receivedString[i] <=90){
-			receivedString[i] += 32;
-		} else if (receivedString[i] >= 97 && receivedString[i] <= 122){
-			receivedString[i] -= 32;
-		}
+	// // /* ----------- Sending String --------------- */
+	receivedBytes = 0;
+	while(receivedBytes < receivedCount){
+		receivedBytes += write(senderSocket, &recvString, (sizeof recvString) - receivedBytes, receivedBytes);
 	}
-
-	printf("converted String: \"%s\" \n", receivedString);
-	
-	// /* ----------- Sending String --------------- */
-
-	if (write(socketDesc, &receivedString, sizeof(receivedString)) == -1 ){
-		//error while sending data
-		printf("Error while sending String\n");
-	};
+	write(senderSocket, &lineEnd, sizeof lineEnd);
 	printf("String sent!\n");
+
+
+	char cBuffer2[4];
+	char recvString2[4];
 	
-	close(socketDesc);
+	receivedBytes = 0;
+	while(receivedBytes < 4){
+		int readBytes = read(receiverSocket, &cBuffer2, 4 - receivedBytes, receivedBytes);
+		int j;
+		for(j = 0; j < readBytes; j++){
+			recvString2[j + receivedBytes] = cBuffer2[j];
+		}
+		receivedBytes += readBytes;
+	}
+	recvString2[4] = '\0';
+
+	printf("Received result: %s\n", recvString2);
+	
+	close(senderSocket);
+	close(receiverSocket);
 }
