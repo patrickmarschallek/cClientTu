@@ -1,0 +1,18 @@
+Module DEFINITIONS ::= 
+BEGIN 
+
+Message ::= SEQUENCE 
+{ 
+	msgType  MsgType,
+	number INTEGER,
+	string IA5String
+}   
+MsgType ::= ENUMERATED
+{
+	ClientToServerInt,
+	ServerToClientAnswer,
+	ClientToServerString,
+	ServerToClientResult
+}
+
+END
