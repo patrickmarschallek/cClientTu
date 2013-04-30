@@ -3,16 +3,16 @@ BEGIN
 
 Message ::= SEQUENCE 
 { 
-	msgType  MsgType,
+	msgType MsgType,
 	number INTEGER,
 	string IA5String
 }   
 MsgType ::= ENUMERATED
 {
-	ClientToServerInt,
-	ServerToClientAnswer,
-	ClientToServerString,
-	ServerToClientResult
+	clientToServerInt (0),
+	serverToClientAnswer (1),
+	clientToServerString (2),
+	serverToClientResult (3)
 }
 
 END
