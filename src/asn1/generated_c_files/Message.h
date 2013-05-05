@@ -12,7 +12,7 @@
 
 /* Including external dependencies */
 #include "MsgType.h"
-#include <INTEGER.h>
+#include <NativeInteger.h>
 #include <IA5String.h>
 #include <constr_SEQUENCE.h>
 
@@ -23,7 +23,7 @@ extern "C" {
 /* Message */
 typedef struct Message {
 	MsgType_t	 msgType;
-	INTEGER_t	 number;
+	long	 number;
 	IA5String_t	 string;
 	
 	/* Context for parsing across buffer boundaries */

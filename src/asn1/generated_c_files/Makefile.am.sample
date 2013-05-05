@@ -6,8 +6,6 @@ ASN_MODULE_HEADERS=	\
 	Message.h	\
 	MsgType.h
 
-ASN_MODULE_HEADERS+=ENUMERATED.h
-ASN_MODULE_SOURCES+=ENUMERATED.c
 ASN_MODULE_HEADERS+=INTEGER.h
 ASN_MODULE_HEADERS+=NativeEnumerated.h
 ASN_MODULE_HEADERS+=IA5String.h
@@ -84,5 +82,5 @@ clean:
 regen: regenerate-from-asn1-source
 
 regenerate-from-asn1-source:
-	asn1c Module.asn1
+	asn1c -fnative-types Module.asn1
 

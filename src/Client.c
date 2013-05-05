@@ -3,10 +3,50 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
+#include "Message.h"
+#include "MsgType.h"
 
 void printHelp(){
 	printf("Usage: client serverip senderport receiverport integer\n");
 }
+
+ /* Write the encoded output into some FILE stream. */
+static int write_out(const void *buffer, size_t size, void *app_key) {
+	int32_t* senderSocketP = (int32_t *) (app_key);
+	int32_t senderSocket = *senderSocketP;
+	int written = 0;
+	while(written < size){
+		written += write(senderSocket, &buffer, size - written, written);
+	}
+}
+
+void sendMessage(MsgType_t *msgType, long integer, IA5String_t *string, int senderSocket){
+	Message_t *message; /* Type to encode */
+	asn_enc_rval_t ec; /* Encoder return value  */
+	
+	/* Allocate the Message */
+	message = calloc(1, sizeof(Message_t)); /* not malloc! */
+	if(!message) {
+		perror("calloc() failed");
+		exit(1); 
+	}
+	/* Initialize the Rectangle members */
+	message->msgType = *msgType;  /* any random value */
+	message->number  = integer;  /* any random value */
+	message->string = *string;
+
+	/* Encode the Rectangle type as BER (DER) */
+	ec = der_encode(&asn_DEF_Message, message, write_out, &senderSocket);
+	// ec = der_encode(&asn_DEF_Rectangle, rectangle, write_out, fp);
+	// fclose(fp);
+	if(ec.encoded == -1) {
+		fprintf(stderr, "Could not encode Rectangle (at %s)\n", ec.failed_type ? ec.failed_type->name : "unknown");
+		exit(1);
+	} else {
+		fprintf(stderr, "Created with BER encoded Rectangle\n");
+   }
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -78,103 +118,113 @@ int main(int argc, char *argv[])
 	int index;
 	int empty = 0;
 
+	IA5String_t* string; /* Type to encode */
+	
+	/* Allocate the Message */
+	string = calloc(1, sizeof(IA5String_t)); 
 
-	printf("sending integer %s\n", integerToSendC);
-	if (write(senderSocket, &integerToSendN, sizeof integerToSendN) == -1 ){
-		//error while sending data
-		printf("Error while sending String\n");
-	};
-	printf("integer sent!\n");
+	long integer = 123;
+	// integer = 1234;
+
+	sendMessage(MsgType_clientToServerInt, integer, string, senderSocket);
+
+
+	// printf("sending integer %s\n", integerToSendC);
+	// if (write(senderSocket, &integerToSendN, sizeof integerToSendN) == -1 ){
+	// 	//error while sending data
+	// 	printf("Error while sending String\n");
+	// };
+	// printf("integer sent!\n");
 
 	
-	/* ----------- Receiving integer & string --------------- */
+	// /* ----------- Receiving integer & string --------------- */
 	
-	int32_t intBuffer = 0;
+	// int32_t intBuffer = 0;
 	
-	int receivedBytes = 0;
-	int32_t receivedInteger = 0;
-	while(receivedBytes < 4){
-		int readBytes = read(receiverSocket, &intBuffer, (sizeof intBuffer) - receivedBytes, receivedBytes);
-		receivedInteger += (intBuffer << (8*receivedBytes));
-		receivedBytes += readBytes;
-	}
+	// int receivedBytes = 0;
+	// int32_t receivedInteger = 0;
+	// while(receivedBytes < 4){
+	// 	int readBytes = read(receiverSocket, &intBuffer, (sizeof intBuffer) - receivedBytes, receivedBytes);
+	// 	receivedInteger += (intBuffer << (8*receivedBytes));
+	// 	receivedBytes += readBytes;
+	// }
 
-    int32_t receivedInt = ntohl(receivedInteger);
+ //    int32_t receivedInt = ntohl(receivedInteger);
 
-    printf("Received int: %d\n", receivedInt);
+ //    printf("Received int: %d\n", receivedInt);
 
-    int32_t intBuffer2 = 0;
-    int32_t receivedBytes2 = 0;
-	int32_t receivedInteger2 = 0;
-	while(receivedBytes2 < 4){
-		int readBytes = read(receiverSocket, &intBuffer2, (sizeof intBuffer2) - receivedBytes2, receivedBytes2);
-		receivedInteger2 += (intBuffer2 << (8*receivedBytes2));
-		receivedBytes2 += readBytes;
-	}
+ //    int32_t intBuffer2 = 0;
+ //    int32_t receivedBytes2 = 0;
+	// int32_t receivedInteger2 = 0;
+	// while(receivedBytes2 < 4){
+	// 	int readBytes = read(receiverSocket, &intBuffer2, (sizeof intBuffer2) - receivedBytes2, receivedBytes2);
+	// 	receivedInteger2 += (intBuffer2 << (8*receivedBytes2));
+	// 	receivedBytes2 += readBytes;
+	// }
 
-    int32_t receivedCount = ntohl(receivedInteger2);
+ //    int32_t receivedCount = ntohl(receivedInteger2);
 
-    if(receivedCount > 20 || receivedCount < 0){
-    	printf("Received wrong count\n");
+ //    if(receivedCount > 20 || receivedCount < 0){
+ //    	printf("Received wrong count\n");
 
-		close(senderSocket);
-		close(receiverSocket);
+	// 	close(senderSocket);
+	// 	close(receiverSocket);
 
-		return;
-    }
+	// 	return;
+ //    }
 
-	char cBuffer[receivedCount];
-	char recvString[receivedCount];
+	// char cBuffer[receivedCount];
+	// char recvString[receivedCount];
 	
-	receivedBytes = 0;
-	while(receivedBytes < receivedCount){
-		int readBytes = read(receiverSocket, &cBuffer, (sizeof cBuffer) - receivedBytes, receivedBytes);
-		int j;
-		for(j = 0; j < readBytes; j++){
-			recvString[j + receivedBytes] = cBuffer[j];
-		}
-		receivedBytes += readBytes;
-	}
-	recvString[receivedCount] = '\0';
+	// receivedBytes = 0;
+	// while(receivedBytes < receivedCount){
+	// 	int readBytes = read(receiverSocket, &cBuffer, (sizeof cBuffer) - receivedBytes, receivedBytes);
+	// 	int j;
+	// 	for(j = 0; j < readBytes; j++){
+	// 		recvString[j + receivedBytes] = cBuffer[j];
+	// 	}
+	// 	receivedBytes += readBytes;
+	// }
+	// recvString[receivedCount] = '\0';
 
-	printf("received String: \"%s\"\n", recvString);
+	// printf("received String: \"%s\"\n", recvString);
 
-	//  ----------- Changing cases in String --------------- 
-	int i;
-	for(i = 0; i < sizeof recvString; i++){
-		if(recvString[i] >= 65 && recvString[i] <=90){
-			recvString[i] += 32;
-		} else if (recvString[i] >= 97 && recvString[i] <= 122){
-			recvString[i] -= 32;
-		}
-	}
+	// //  ----------- Changing cases in String --------------- 
+	// int i;
+	// for(i = 0; i < sizeof recvString; i++){
+	// 	if(recvString[i] >= 65 && recvString[i] <=90){
+	// 		recvString[i] += 32;
+	// 	} else if (recvString[i] >= 97 && recvString[i] <= 122){
+	// 		recvString[i] -= 32;
+	// 	}
+	// }
 
-	printf("converted String: \"%s\" \n", recvString);
+	// printf("converted String: \"%s\" \n", recvString);
 	
-	// // /* ----------- Sending String --------------- */
-	receivedBytes = 0;
-	while(receivedBytes < receivedCount){
-		receivedBytes += write(senderSocket, &recvString, (sizeof recvString) - receivedBytes, receivedBytes);
-	}
-	write(senderSocket, &lineEnd, sizeof lineEnd);
-	printf("String sent!\n");
+	// // // /* ----------- Sending String --------------- */
+	// receivedBytes = 0;
+	// while(receivedBytes < receivedCount){
+	// 	receivedBytes += write(senderSocket, &recvString, (sizeof recvString) - receivedBytes, receivedBytes);
+	// }
+	// write(senderSocket, &lineEnd, sizeof lineEnd);
+	// printf("String sent!\n");
 
 
-	char cBuffer2[4];
-	char recvString2[4];
+	// char cBuffer2[4];
+	// char recvString2[4];
 	
-	receivedBytes = 0;
-	while(receivedBytes < 4){
-		int readBytes = read(receiverSocket, &cBuffer2, 4 - receivedBytes, receivedBytes);
-		int j;
-		for(j = 0; j < readBytes; j++){
-			recvString2[j + receivedBytes] = cBuffer2[j];
-		}
-		receivedBytes += readBytes;
-	}
-	recvString2[4] = '\0';
+	// receivedBytes = 0;
+	// while(receivedBytes < 4){
+	// 	int readBytes = read(receiverSocket, &cBuffer2, 4 - receivedBytes, receivedBytes);
+	// 	int j;
+	// 	for(j = 0; j < readBytes; j++){
+	// 		recvString2[j + receivedBytes] = cBuffer2[j];
+	// 	}
+	// 	receivedBytes += readBytes;
+	// }
+	// recvString2[4] = '\0';
 
-	printf("Received result: %s\n", recvString2);
+	// printf("Received result: %s\n", recvString2);
 	
 	close(senderSocket);
 	close(receiverSocket);

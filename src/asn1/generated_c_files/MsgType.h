@@ -11,7 +11,7 @@
 #include <asn_application.h>
 
 /* Including external dependencies */
-#include <ENUMERATED.h>
+#include <NativeEnumerated.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +26,7 @@ typedef enum MsgType {
 } e_MsgType;
 
 /* MsgType */
-typedef ENUMERATED_t	 MsgType_t;
+typedef long	 MsgType_t;
 
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_MsgType;

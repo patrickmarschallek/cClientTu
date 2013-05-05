@@ -19,7 +19,7 @@ static asn_TYPE_member_t asn_MBR_Message_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct Message, number),
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
-		&asn_DEF_INTEGER,
+		&asn_DEF_NativeInteger,
 		0,	/* Defer constraints checking to the member type */
 		0,	/* PER is not compiled, use -gen-PER */
 		0,
