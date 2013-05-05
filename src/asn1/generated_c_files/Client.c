@@ -5,6 +5,7 @@
 #include <string.h>
 #include <Message.h>
 #include <MsgType.h>
+#include <stdbool.h>
 
 void printHelp(){
 	printf("Usage: client serverip senderport receiverport integer\n");
@@ -26,7 +27,7 @@ static int write_out(const void *buffer, size_t size, void *app_key) {
 	while(written < size){
 		written += write(senderSocket, buffer, size - written, written);
 	}
-	printf("%d bytes written\n", written);
+	// printf("%d bytes written\n", written);
 
 }
 
@@ -34,27 +35,27 @@ void sendMessage(MsgType_t msgType, long integer, IA5String_t *string, int sende
 	Message_t *message; /* Type to encode */
 	asn_enc_rval_t ec; /* Encoder return value  */
 	
-	printf("Allocating Message_t\n");
+	// printf("Allocating Message_t\n");
 	/* Allocate the Message */
 	message = calloc(1, sizeof(Message_t)); /* not malloc! */
 	if(!message) {
 		perror("calloc() failed");
 		exit(1); 
 	}
-	printf("Initialize the Rectangle members\n");
+	// printf("Initialize the Rectangle members\n");
 	/* Initialize the Rectangle members */
 	message->msgType = msgType;  /* any random value */
-	printf("\tmsgType done\n");
+	// printf("\tmsgType done\n");
 	message->number  = integer;  /* any random value */
-	printf("\tnumber done\n");
+	// printf("\tnumber done\n");
 	message->string = *string;
-	printf("\tstring done\n");
+	// printf("\tstring done\n");
 
-	printf("message->msgType: %d\n", (int) message->msgType);
-	printf("message->number: %d\n", (int) message->number);
-	printf("message->string: %s\n", message->string.buf);
+	// printf("message->msgType: %d\n", (int) message->msgType);
+	// printf("message->number: %d\n", (int) message->number);
+	// printf("message->string: %s\n", message->string.buf);
 
-	printf("Calling der_encode\n");
+	// printf("Calling der_encode\n");
 	/* Encode the Rectangle type as BER (DER) */
 	ec = der_encode(&asn_DEF_Message, message, write_out, &senderSocket);
 	// ec = der_encode(&asn_DEF_Rectangle, rectangle, write_out, fp);
@@ -63,14 +64,111 @@ void sendMessage(MsgType_t msgType, long integer, IA5String_t *string, int sende
 		fprintf(stderr, "Could not encode Rectangle (at %s)\n", ec.failed_type ? ec.failed_type->name : "unknown");
 		exit(1);
 	} else {
-		fprintf(stderr, "Created with BER encoded Rectangle\n");
+		// fprintf(stderr, "Created with BER encoded Rectangle\n");
    }
+}
+
+Message_t receiveMessage(int receiverSocket){
+	char tag;
+
+	read(receiverSocket, &tag, 1);
+
+	char firstLengthByte;
+
+	read(receiverSocket, &firstLengthByte, 1);
+
+	// printf("received tag: %d %c", (int) tag, tag);
+
+	int32_t firstLengthByteInt = (int32_t) firstLengthByte;
+
+	int32_t length;
+
+	bool isLengthUndetermined = false;
+
+	if(firstLengthByteInt <= 127){
+		length = firstLengthByteInt;
+	} else if(firstLengthByteInt == 128){
+		// undetermined form
+		isLengthUndetermined = true;
+	} if(firstLengthByteInt > 128) {
+		int32_t octetsForLength = firstLengthByteInt - 128;
+		//TODO read length
+	}
+
+	// printf("received length: %d", length);
+
+	if(!isLengthUndetermined){
+		char buf[length];      /* Temporary buffer      */
+		
+		char recvString[length + 1 + 1];
+		recvString[0] = tag;
+		recvString[1] = length;
+
+		asn_dec_rval_t rval; /* Decoder return value  */
+		Message_t *message = 0; /* Type to decode. Note this 01! */ 
+
+		int receivedBytes = 0;
+
+		while(receivedBytes < length){
+			int readBytes = read(receiverSocket, &buf, length - receivedBytes, receivedBytes);
+			int j;
+			for(j = 0; j < readBytes; j++){
+				recvString[j + receivedBytes + 2] = buf[j];
+			}
+			receivedBytes += readBytes;
+		}
+		// recvString[receivedCount] = '\0';
+
+		/* Decode the input buffer as Rectangle type */
+		rval = ber_decode(0, &asn_DEF_Message, (void **)&message, recvString, length + 2);
+
+
+		// printf("message->msgType: %d\n", (int) message->msgType);
+		// printf("message->number: %d\n", (int) message->number);
+		// printf("message->string: %s\n", message->string.buf);
+
+		if(rval.code != RC_OK) {
+			printf("Broken Rectangle encoding at byte");
+			exit(1); 
+		}
+
+		return *message;
+	} else {
+		char buf[1024];
+		buf[0] = tag;
+		buf[1] = length;
+
+		asn_dec_rval_t rval; /* Decoder return value  */
+		Message_t *message = 0; /* Type to decode. Note this 01! */ 
+
+		bool endOfContentReceived = false;
+		int i = 2;
+		while(!endOfContentReceived){
+			char cBuf;
+			read(receiverSocket, &cBuf, 1);
+			buf[i] = cBuf;
+			if(i > 0 && (int)buf[i] == 0 && (int)buf[i - 1] == 0){
+				endOfContentReceived = true;
+			}
+			i++;
+		}
+		// recvString[receivedCount] = '\0';
+
+		/* Decode the input buffer as Rectangle type */
+		rval = ber_decode(0, &asn_DEF_Message, (void **)&message, buf, i);
+
+		if(rval.code != RC_OK) {
+			printf("Broken Rectangle encoding at byte ");
+			exit(1); 
+		}
+
+		return *message;
+	}
 }
 
 
 int main(int argc, char *argv[])
 {
-
 	if(argc != 5){
 		printHelp();
 		return;
@@ -108,7 +206,6 @@ int main(int argc, char *argv[])
 		printf("Error when creating sockets\n");
 		return;
 	} 
-	printf("senderSocket: %d\n ", senderSocket);
 
 	// creating serveraddress of type sockaddr_in
 	struct sockaddr_in serverAddrSender;
@@ -134,117 +231,43 @@ int main(int argc, char *argv[])
 	
 	/* ----------- Sending integer --------------- */
 	
-	// int index;
-	// int empty = 0;
-
 	IA5String_t* string; /* Type to encode */
 	
 	/* Allocate the Message */
 	string = calloc(1, sizeof(IA5String_t)); 
 
 	long integer = (long) integerToSend;
-	// integer = 1234;
-	printf("about to call sendMessage\n");
+	
+	printf("Client - Sending int: %d \n", integerToSend);
+
 	sendMessage(MsgType_clientToServerInt, integer, string, senderSocket);
 
+	Message_t msg = receiveMessage(receiverSocket);
 
-	// printf("sending integer %s\n", integerToSendC);
-	// if (write(senderSocket, &integerToSendN, sizeof integerToSendN) == -1 ){
-	// 	//error while sending data
-	// 	printf("Error while sending String\n");
-	// };
-	// printf("integer sent!\n");
+	printf("Client - Received int: %d and String: %s\n", (int) msg.number, msg.string.buf);
 
+	char* recvString = msg.string.buf;
 	
-	// /* ----------- Receiving integer & string --------------- */
-	
-	// int32_t intBuffer = 0;
-	
-	// int receivedBytes = 0;
-	// int32_t receivedInteger = 0;
-	// while(receivedBytes < 4){
-	// 	int readBytes = read(receiverSocket, &intBuffer, (sizeof intBuffer) - receivedBytes, receivedBytes);
-	// 	receivedInteger += (intBuffer << (8*receivedBytes));
-	// 	receivedBytes += readBytes;
-	// }
+	/* ----------- Changing cases in String --------------- */ 
+	int i;
+	for(i = 0; true; i++){
+		if(recvString[i] == '\0'){
+			break;
+		}
+		if(recvString[i] >= 65 && recvString[i] <=90){
+			recvString[i] += 32;
+		} else if (recvString[i] >= 97 && recvString[i] <= 122){
+			recvString[i] -= 32;
+		}
+	}
 
- //    int32_t receivedInt = ntohl(receivedInteger);
+	printf("Client - Sending converted String: %s\n", msg.string.buf);
 
- //    printf("Received int: %d\n", receivedInt);
+	sendMessage(MsgType_clientToServerString, 0, &msg.string, senderSocket);
 
- //    int32_t intBuffer2 = 0;
- //    int32_t receivedBytes2 = 0;
-	// int32_t receivedInteger2 = 0;
-	// while(receivedBytes2 < 4){
-	// 	int readBytes = read(receiverSocket, &intBuffer2, (sizeof intBuffer2) - receivedBytes2, receivedBytes2);
-	// 	receivedInteger2 += (intBuffer2 << (8*receivedBytes2));
-	// 	receivedBytes2 += readBytes;
-	// }
+	Message_t msg2 = receiveMessage(receiverSocket);
+	printf("Client - received result: %s \n", msg2.string.buf);
 
- //    int32_t receivedCount = ntohl(receivedInteger2);
-
- //    if(receivedCount > 20 || receivedCount < 0){
- //    	printf("Received wrong count\n");
-
-	// 	close(senderSocket);
-	// 	close(receiverSocket);
-
-	// 	return;
- //    }
-
-	// char cBuffer[receivedCount];
-	// char recvString[receivedCount];
-	
-	// receivedBytes = 0;
-	// while(receivedBytes < receivedCount){
-	// 	int readBytes = read(receiverSocket, &cBuffer, (sizeof cBuffer) - receivedBytes, receivedBytes);
-	// 	int j;
-	// 	for(j = 0; j < readBytes; j++){
-	// 		recvString[j + receivedBytes] = cBuffer[j];
-	// 	}
-	// 	receivedBytes += readBytes;
-	// }
-	// recvString[receivedCount] = '\0';
-
-	// printf("received String: \"%s\"\n", recvString);
-
-	// //  ----------- Changing cases in String --------------- 
-	// int i;
-	// for(i = 0; i < sizeof recvString; i++){
-	// 	if(recvString[i] >= 65 && recvString[i] <=90){
-	// 		recvString[i] += 32;
-	// 	} else if (recvString[i] >= 97 && recvString[i] <= 122){
-	// 		recvString[i] -= 32;
-	// 	}
-	// }
-
-	// printf("converted String: \"%s\" \n", recvString);
-	
-	// // // /* ----------- Sending String --------------- */
-	// receivedBytes = 0;
-	// while(receivedBytes < receivedCount){
-	// 	receivedBytes += write(senderSocket, &recvString, (sizeof recvString) - receivedBytes, receivedBytes);
-	// }
-	// write(senderSocket, &lineEnd, sizeof lineEnd);
-	// printf("String sent!\n");
-
-
-	// char cBuffer2[4];
-	// char recvString2[4];
-	
-	// receivedBytes = 0;
-	// while(receivedBytes < 4){
-	// 	int readBytes = read(receiverSocket, &cBuffer2, 4 - receivedBytes, receivedBytes);
-	// 	int j;
-	// 	for(j = 0; j < readBytes; j++){
-	// 		recvString2[j + receivedBytes] = cBuffer2[j];
-	// 	}
-	// 	receivedBytes += readBytes;
-	// }
-	// recvString2[4] = '\0';
-
-	// printf("Received result: %s\n", recvString2);
-	
 	close(senderSocket);
 	close(receiverSocket);
 }
