@@ -14,27 +14,47 @@ void printHelp(){
 static int write_out(const void *buffer, size_t size, void *app_key) {
 	int32_t* senderSocketP = (int32_t *) (app_key);
 	int32_t senderSocket = *senderSocketP;
+	int i;
+	// /* printing out decimal byte values */
+	// printf("writing out: \n");
+	// for(i = 0; i < size; i++){
+	// 	printf("%d ", (int)((char*)buffer)[i]);
+	// }
+	// printf("\n");
+	
 	int written = 0;
 	while(written < size){
-		written += write(senderSocket, &buffer, size - written, written);
+		written += write(senderSocket, buffer, size - written, written);
 	}
+	printf("%d bytes written\n", written);
+
 }
 
-void sendMessage(MsgType_t *msgType, long integer, IA5String_t *string, int senderSocket){
+void sendMessage(MsgType_t msgType, long integer, IA5String_t *string, int senderSocket){
 	Message_t *message; /* Type to encode */
 	asn_enc_rval_t ec; /* Encoder return value  */
 	
+	printf("Allocating Message_t\n");
 	/* Allocate the Message */
 	message = calloc(1, sizeof(Message_t)); /* not malloc! */
 	if(!message) {
 		perror("calloc() failed");
 		exit(1); 
 	}
+	printf("Initialize the Rectangle members\n");
 	/* Initialize the Rectangle members */
-	message->msgType = *msgType;  /* any random value */
+	message->msgType = msgType;  /* any random value */
+	printf("\tmsgType done\n");
 	message->number  = integer;  /* any random value */
+	printf("\tnumber done\n");
 	message->string = *string;
+	printf("\tstring done\n");
 
+	printf("message->msgType: %d\n", (int) message->msgType);
+	printf("message->number: %d\n", (int) message->number);
+	printf("message->string: %s\n", message->string.buf);
+
+	printf("Calling der_encode\n");
 	/* Encode the Rectangle type as BER (DER) */
 	ec = der_encode(&asn_DEF_Message, message, write_out, &senderSocket);
 	// ec = der_encode(&asn_DEF_Rectangle, rectangle, write_out, fp);
@@ -88,6 +108,7 @@ int main(int argc, char *argv[])
 		printf("Error when creating sockets\n");
 		return;
 	} 
+	printf("senderSocket: %d\n ", senderSocket);
 
 	// creating serveraddress of type sockaddr_in
 	struct sockaddr_in serverAddrSender;
@@ -113,19 +134,17 @@ int main(int argc, char *argv[])
 	
 	/* ----------- Sending integer --------------- */
 	
-	// integerToSendH = integerToSend in network format
-	int32_t integerToSendN = (int) htonl(integerToSend);
-	int index;
-	int empty = 0;
+	// int index;
+	// int empty = 0;
 
 	IA5String_t* string; /* Type to encode */
 	
 	/* Allocate the Message */
 	string = calloc(1, sizeof(IA5String_t)); 
 
-	long integer = 123;
+	long integer = (long) integerToSend;
 	// integer = 1234;
-
+	printf("about to call sendMessage\n");
 	sendMessage(MsgType_clientToServerInt, integer, string, senderSocket);
 
 
