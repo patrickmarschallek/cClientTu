@@ -3,8 +3,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
-#include "Message.h"
-#include "MsgType.h"
+#include <Message.h>
+#include <MsgType.h>
 
 void printHelp(){
 	printf("Usage: client serverip senderport receiverport integer\n");
