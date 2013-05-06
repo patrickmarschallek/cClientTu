@@ -8,26 +8,151 @@
 #include <stdbool.h>
 
 void printHelp(){
-	printf("Usage: client serverip senderport receiverport integer\n");
+	printf("Usage: client serverip senderport receiverport integer [0|1]\n");
+	printf("\t 1 = human readable form; 0 = hexadecimal\n");
 }
+bool print_tag(int tag){
+	printf("\nTag: %d\n", tag);
+	if(tag < 64){
+		printf("\tUNIVERSAL\n");
+	} else if (tag < 128) {
+		printf("\tAPPLICATION\n");
+	} else if (tag < 192) {
+		printf("\tcontext specific\n");
+	}else {
+		printf("\tPRIVATE\n");
+	}
+
+	if((tag & 32) == 32){
+		printf("\tcombined coding\n");
+	} else {
+		printf("\tprimitive type\n");
+	}
+
+	if((tag & 31) == 0){
+		printf("\tEOC\n");
+	} else if((tag & 31) == 1){
+		printf("\tBOOLEAN\n");
+	} else if((tag & 31) == 2){
+		printf("\tINTEGER\n");
+	} else if((tag & 31) == 3){
+		printf("\tBIT STRING\n");
+	} else if((tag & 31) == 4){
+		printf("\tOCTET STRING\n");
+	} else if((tag & 31) == 5){
+		printf("\tNULL\n");
+	} else if((tag & 31) == 6){
+		printf("\tOBJECT IDENTIFIER\n");
+	} else if((tag & 31) == 7){
+		printf("\tObject Descriptor\n");
+	} else if((tag & 31) == 8){
+		printf("\tEXTERNAL\n");
+	} else if((tag & 31) == 9){
+		printf("\tREAL (float)\n");
+	} else if((tag & 31) == 10){
+		printf("\tENUMERATED\n");
+	} else if((tag & 31) == 11){
+		printf("\tEMBEDDED PDV\n");
+	} else if((tag & 31) == 12){
+		printf("\tUTF8String\n");
+	} else if((tag & 31) == 13){
+		printf("\tRELATIVE-OID\n");
+	} else if((tag & 31) == 14){
+		printf("\t(reserved)\n");
+	} else if((tag & 31) == 15){
+		printf("\t(reserved)\n");
+	} else if((tag & 31) == 16){
+		printf("\tSEQUENCE and SEQUENCE OF\n");
+	} else if((tag & 31) == 17){
+		printf("\tSET and SET OF\n");
+	} else if((tag & 31) == 18){
+		printf("\tNumericString\n");
+	} else if((tag & 31) == 19){
+		printf("\tPrintableString\n");
+	} else if((tag & 31) == 20){
+		printf("\tT61String\n");
+	} else if((tag & 31) == 21){
+		printf("\tVideotexString\n");
+	} else if((tag & 31) == 22){
+		printf("\tIA5String\n");
+	} else if((tag & 31) == 23){
+		printf("\tUTCTime\n");
+	} else if((tag & 31) == 24){
+		printf("\tGeneralizedTime\n");
+	} else if((tag & 31) == 25){
+		printf("\tGraphicString\n");
+	} else if((tag & 31) == 26){
+		printf("\tVisibleString\n");
+	} else if((tag & 31) == 27){
+		printf("\tGeneralString\n");
+	} else if((tag & 31) == 28){
+		printf("\tUniversalString\n");
+	} else if((tag & 31) == 29){
+		printf("\tCHARACTER STRING\n");
+	} else if((tag & 31) == 30){
+		printf("\tBMPString\n");
+	} else if((tag & 31) == 31){
+		printf("\t(use long-form)\n");
+	} 
+	return ((tag & 32) == 32);
+}
+void print_ber(void *buffer, int length, bool hex, int offset);
+
+int print_ber_readable(void *buffer, int offset){
+	int tag = 255 & ((int)((char*)buffer)[offset]);
+	bool isCombined = print_tag(tag);
+	int length = 255 & ((int)((char*)buffer)[offset + 1]);
+	printf("Length: \n\t%d \n", length);
+	if(isCombined){
+		while(offset < length){
+			int retVal= print_ber_readable(buffer, offset + 2);
+			offset = offset + retVal;
+		}
+		
+	} else {
+		print_ber(buffer, length, true, offset + 2);
+	}
+	return length + 2;
+}
+
+void print_ber(void *buffer, int length, bool hex, int offset){
+	// printf("\nlength %d offset %d\n", length, offset);
+	if (hex) {
+		printf("Hexadecimal value:\n\t");
+		/* printing out hexadecimal byte values */
+		int i;
+		for(i = 0; i < length; i++){
+			char ch = (int)((char*)buffer)[i + offset];
+			printf("%02X ", ch & 0xff);
+		}
+		printf("\n");
+	} else {
+		print_ber_readable(buffer, 0);
+	}
+}
+char printBuffer[1024];
+int printIndex = 0;
+int printLength = 0;
+bool humanReadable = true;
 
  /* Write the encoded output into some FILE stream. */
 static int write_out(const void *buffer, size_t size, void *app_key) {
 	int32_t* senderSocketP = (int32_t *) (app_key);
 	int32_t senderSocket = *senderSocketP;
 	int i;
-	// /* printing out decimal byte values */
-	// printf("writing out: \n");
-	// for(i = 0; i < size; i++){
-	// 	printf("%d ", (int)((char*)buffer)[i]);
-	// }
-	// printf("\n");
+	
+	/* printing out hexadecimal byte values */
+	for(i = 0; i < size; i++){
+		char ch = (int)((char*)buffer)[i];
+		printBuffer[printIndex] = ch;
+		printIndex++;
+	}
 	
 	int written = 0;
 	while(written < size){
 		written += write(senderSocket, buffer, size - written, written);
 	}
-	// printf("%d bytes written\n", written);
+	printLength += size;
 
 }
 
@@ -42,30 +167,25 @@ void sendMessage(MsgType_t msgType, long integer, IA5String_t *string, int sende
 		perror("calloc() failed");
 		exit(1); 
 	}
-	// printf("Initialize the Rectangle members\n");
-	/* Initialize the Rectangle members */
-	message->msgType = msgType;  /* any random value */
-	// printf("\tmsgType done\n");
-	message->number  = integer;  /* any random value */
-	// printf("\tnumber done\n");
+	message->msgType = msgType;  
+	message->number  = integer;  
 	message->string = *string;
-	// printf("\tstring done\n");
 
-	// printf("message->msgType: %d\n", (int) message->msgType);
-	// printf("message->number: %d\n", (int) message->number);
-	// printf("message->string: %s\n", message->string.buf);
-
-	// printf("Calling der_encode\n");
-	/* Encode the Rectangle type as BER (DER) */
+	printf("\n");
+	
 	ec = der_encode(&asn_DEF_Message, message, write_out, &senderSocket);
-	// ec = der_encode(&asn_DEF_Rectangle, rectangle, write_out, fp);
-	// fclose(fp);
+	
+	print_ber(printBuffer, printLength, !humanReadable, 0);
+	printIndex = 0;
+	printLength = 0;
+
 	if(ec.encoded == -1) {
 		fprintf(stderr, "Could not encode Rectangle (at %s)\n", ec.failed_type ? ec.failed_type->name : "unknown");
 		exit(1);
 	} else {
 		// fprintf(stderr, "Created with BER encoded Rectangle\n");
    }
+   printf("\n");
 }
 
 Message_t receiveMessage(int receiverSocket){
@@ -76,8 +196,6 @@ Message_t receiveMessage(int receiverSocket){
 	char firstLengthByte;
 
 	read(receiverSocket, &firstLengthByte, 1);
-
-	// printf("received tag: %d %c", (int) tag, tag);
 
 	int32_t firstLengthByteInt = (int32_t) firstLengthByte;
 
@@ -95,17 +213,16 @@ Message_t receiveMessage(int receiverSocket){
 		//TODO read length
 	}
 
-	// printf("received length: %d", length);
-
+	
+	asn_dec_rval_t rval; 
+	Message_t *message = 0;  
+	
 	if(!isLengthUndetermined){
-		char buf[length];      /* Temporary buffer      */
+		char buf[length];
 		
 		char recvString[length + 1 + 1];
 		recvString[0] = tag;
 		recvString[1] = length;
-
-		asn_dec_rval_t rval; /* Decoder return value  */
-		Message_t *message = 0; /* Type to decode. Note this 01! */ 
 
 		int receivedBytes = 0;
 
@@ -117,15 +234,10 @@ Message_t receiveMessage(int receiverSocket){
 			}
 			receivedBytes += readBytes;
 		}
-		// recvString[receivedCount] = '\0';
 
-		/* Decode the input buffer as Rectangle type */
+		print_ber(recvString, length+2, !humanReadable, 0);
+
 		rval = ber_decode(0, &asn_DEF_Message, (void **)&message, recvString, length + 2);
-
-
-		// printf("message->msgType: %d\n", (int) message->msgType);
-		// printf("message->number: %d\n", (int) message->number);
-		// printf("message->string: %s\n", message->string.buf);
 
 		if(rval.code != RC_OK) {
 			printf("Broken Rectangle encoding at byte");
@@ -138,9 +250,6 @@ Message_t receiveMessage(int receiverSocket){
 		buf[0] = tag;
 		buf[1] = length;
 
-		asn_dec_rval_t rval; /* Decoder return value  */
-		Message_t *message = 0; /* Type to decode. Note this 01! */ 
-
 		bool endOfContentReceived = false;
 		int i = 2;
 		while(!endOfContentReceived){
@@ -152,9 +261,9 @@ Message_t receiveMessage(int receiverSocket){
 			}
 			i++;
 		}
-		// recvString[receivedCount] = '\0';
 
-		/* Decode the input buffer as Rectangle type */
+		print_ber(buf, length+2, !humanReadable, 0);
+
 		rval = ber_decode(0, &asn_DEF_Message, (void **)&message, buf, i);
 
 		if(rval.code != RC_OK) {
@@ -169,7 +278,7 @@ Message_t receiveMessage(int receiverSocket){
 
 int main(int argc, char *argv[])
 {
-	if(argc != 5){
+	if(argc < 5){
 		printHelp();
 		return;
 	}
@@ -178,6 +287,10 @@ int main(int argc, char *argv[])
 	char* senderPortC = argv[2];
 	char* receiverPortC = argv[3];
 	char* integerToSendC = argv[4];
+
+	if(argc == 6){
+		humanReadable = (char)*argv[5] == 49;
+	}
 
 	const char lineEnd = '\n';
 
